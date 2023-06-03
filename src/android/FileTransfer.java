@@ -43,6 +43,8 @@ import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CordovaResourceApi;
 import org.apache.cordova.CordovaResourceApi.OpenForReadResult;
+import org.apache.cordova.CordovaWebView;
+import org.apache.cordova.ICordovaCookieManager;
 import org.apache.cordova.LOG;
 import org.apache.cordova.PluginManager;
 import org.apache.cordova.PluginResult;
@@ -227,22 +229,16 @@ public class FileTransfer extends CordovaPlugin {
     private String getCookies(final String target) {
         boolean gotCookie = false;
         String cookie = null;
-        Class webViewClass = webView.getClass();
         try {
-            Method gcmMethod = webViewClass.getMethod("getCookieManager");
-            Class iccmClass  = gcmMethod.getReturnType();
-            Method gcMethod  = iccmClass.getMethod("getCookie", String.class);
 
-            cookie = (String)gcMethod.invoke(
-                        iccmClass.cast(
-                            gcmMethod.invoke(webView)
-                        ), target);
+            ICordovaCookieManager cookieManager = webView.getCookieManager();
+            if (cookieManager != null) {
+                cookie = cookieManager.getCookie(target);
+            }
 
             gotCookie = true;
-        } catch (NoSuchMethodException e) {
-        } catch (IllegalAccessException e) {
-        } catch (InvocationTargetException e) {
-        } catch (ClassCastException e) {
+        } catch (Exception e) {
+            LOG.e(LOG_TAG, e.getMessage(), e);
         }
 
         if (!gotCookie && CookieManager.getInstance() != null) {
@@ -683,13 +679,10 @@ public class FileTransfer extends CordovaPlugin {
 
         if (shouldAllowRequest == null) {
             try {
-                Method gpm = webView.getClass().getMethod("getPluginManager");
-                PluginManager pm = (PluginManager)gpm.invoke(webView);
-                Method san = pm.getClass().getMethod("shouldAllowRequest", String.class);
-                shouldAllowRequest = (Boolean)san.invoke(pm, source);
-            } catch (NoSuchMethodException e) {
-            } catch (IllegalAccessException e) {
-            } catch (InvocationTargetException e) {
+                PluginManager pm = webView.getPluginManager();
+                shouldAllowRequest = pm.shouldAllowRequest(source);
+            } catch (Exception e) {
+                LOG.e(LOG_TAG, e.getMessage(), e);
             }
         }
 
@@ -814,23 +807,7 @@ public class FileTransfer extends CordovaPlugin {
 
 
                         // create FileEntry object
-                        Class webViewClass = webView.getClass();
-                        PluginManager pm = null;
-                        try {
-                            Method gpm = webViewClass.getMethod("getPluginManager");
-                            pm = (PluginManager) gpm.invoke(webView);
-                        } catch (NoSuchMethodException e) {
-                        } catch (IllegalAccessException e) {
-                        } catch (InvocationTargetException e) {
-                        }
-                        if (pm == null) {
-                            try {
-                                Field pmf = webViewClass.getField("pluginManager");
-                                pm = (PluginManager)pmf.get(webView);
-                            } catch (NoSuchFieldException e) {
-                            } catch (IllegalAccessException e) {
-                            }
-                        }
+                        PluginManager pm = webView.getPluginManager();
                         file = resourceApi.mapUriToFile(targetUri);
                         context.targetFile = file;
                         FileUtils filePlugin = (FileUtils) pm.getPlugin("File");
